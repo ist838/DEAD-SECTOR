@@ -1,268 +1,625 @@
-
-import asyncio
-import math
 import os
+import asyncio
+import json
+import math
+import random
+import string
 import time
-import uuid
-
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
-BASE_DIR = Path(__file__).resolve().parent
+rooms = {}
+clients = {}
 
-players = {}
-connections = {}
-lock = asyncio.Lock()
+ROOM_CAPACITY = 4
 
-# 공용 임무 상태
-mission = {
-    "fuses": [],
-    "generator": False,
-    "keycard": False,
-    "escaped": [],
-    "monster": {"x": 0.0, "z": -4.0},
-}
-
-FUSE_POSITIONS = [(-11.0, 7.0), (11.0, 4.0), (-8.0, -10.0)]
+FUSE_POSITIONS = [
+    (-11.0, 7.0),
+    (11.0, 4.0),
+    (-8.0, -10.0),
+]
 KEYCARD_POS = (12.0, -11.0)
 GENERATOR_POS = (0.0, 0.0)
-EXIT_POS = (0.0, -18.0)
-
-last_monster_attack = 0.0
-last_broadcast = 0.0
+EXIT_POS = (0.0, -17.0)
 
 
-def distance(x1, z1, x2, z2):
-    return math.hypot(x1 - x2, z1 - z2)
+def distance2d(a, b):
+    return math.hypot(
+        float(a[0]) - float(b[0]),
+        float(a[1]) - float(b[1]),
+    )
 
 
-def new_player(name):
+def near(player, pos, radius=2.5):
+    return distance2d(
+        (player.get("x", 0), player.get("z", 0)),
+        pos,
+    ) <= radius
+
+
+def clean_name(value):
+    value = str(value or "").strip()
+    value = "".join(
+        c for c in value
+        if c.isalnum() or c in " _-가-힣"
+    )
+    return value[:16] or "생존자"
+
+
+def clean_color(value):
+    allowed = {
+        "#54d6ff",
+        "#ff5757",
+        "#a78bfa",
+        "#ffd166",
+        "#7ee081",
+        "#f3f4f6",
+    }
+    value = str(value or "#54d6ff")
+    return value if value in allowed else "#54d6ff"
+
+
+def clean_outfit(value):
+    allowed = {
+        "보안요원",
+        "연구원",
+        "정비공",
+        "탐사복",
+    }
+    value = str(value or "보안요원")
+    return value if value in allowed else "보안요원"
+
+
+def new_mission():
     return {
-        "name": name,
-        "x": 0.0,
-        "z": 14.0,
-        "yaw": math.pi,
-        "hp": 100,
-        "alive": True,
-        "respawn_at": 0.0,
-        "last_damage": 0.0,
+        "fuses": [],
+        "generator": False,
+        "keycard": False,
+        "escaped": [],
+        "monster": {
+            "x": 0.0,
+            "z": -4.0,
+        },
+        "monster_attack_at": 0.0,
+        "started_at": time.time(),
+        "message": "퓨즈 3개를 찾아 발전기를 가동하세요.",
     }
 
 
-def public_state():
-    now = time.monotonic()
-    monster = mission["monster"]
+def make_room_code():
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
+    for _ in range(100):
+        code = "".join(
+            random.choice(alphabet)
+            for _ in range(5)
+        )
+
+        if code not in rooms:
+            return code
+
+    raise RuntimeError("방 번호 생성 실패")
+
+
+def room_for_player(pid):
+    for room in rooms.values():
+        if pid in room["players"]:
+            return room
+
+    return None
+
+
+def room_public(room):
     return {
-        "type": "state",
-        "players": {
-            pid: {
+        "code": room["code"],
+        "host": room["host"],
+        "started": room["started"],
+        "capacity": ROOM_CAPACITY,
+        "players": [
+            {
+                "id": p["id"],
                 "name": p["name"],
+                "color": p["color"],
+                "outfit": p["outfit"],
+                "host": p["id"] == room["host"],
+                "alive": p.get("alive", True),
+                "hp": p.get("hp", 100),
+                "escaped": (
+                    p["id"] in room["mission"]["escaped"]
+                ),
                 "x": p["x"],
                 "z": p["z"],
-                "yaw": p["yaw"],
-                "hp": p["hp"],
-                "alive": p["alive"],
+                "yaw": p.get("yaw", 0.0),
             }
-            for pid, p in players.items()
-        },
-        "mission": {
-            "fuses": mission["fuses"],
-            "generator": mission["generator"],
-            "keycard": mission["keycard"],
-            "escaped": mission["escaped"],
-            "fuse_positions": FUSE_POSITIONS,
-            "keycard_pos": KEYCARD_POS,
-            "generator_pos": GENERATOR_POS,
-            "exit_pos": EXIT_POS,
-        },
-        "monster": {
-            "x": monster["x"],
-            "z": monster["z"],
-        },
-        "server_time": now,
+            for p in room["players"].values()
+        ],
+        "mission": (
+            room["mission"]
+            if room["started"]
+            else None
+        ),
     }
 
 
-def near(p, pos, radius=2.5):
-    return distance(p["x"], p["z"], pos[0], pos[1]) <= radius
+async def send_json(ws, payload):
+    try:
+        await ws.send_text(
+            json.dumps(payload, ensure_ascii=False)
+        )
+    except Exception:
+        pass
 
 
-def reset_mission():
-    mission["fuses"] = []
-    mission["generator"] = False
-    mission["keycard"] = False
-    mission["escaped"] = []
-    mission["monster"] = {"x": 0.0, "z": -4.0}
+async def broadcast_room(room):
+    payload = {
+        "type": "room_state",
+        "room": room_public(room),
+    }
+
+    await asyncio.gather(
+        *[
+            send_json(p["ws"], payload)
+            for p in list(room["players"].values())
+        ],
+        return_exceptions=True,
+    )
+
+
+async def broadcast_error(ws, message):
+    await send_json(
+        ws,
+        {
+            "type": "error",
+            "message": message,
+        },
+    )
+
+
+def remove_player(pid):
+    room = room_for_player(pid)
+
+    if not room:
+        return None
+
+    room["players"].pop(pid, None)
+
+    if not room["players"]:
+        rooms.pop(room["code"], None)
+        return None
+
+    if room["host"] == pid:
+        room["host"] = next(iter(room["players"]))
+
+    return room
 
 
 async def game_loop():
-    global last_monster_attack
-
     while True:
         await asyncio.sleep(0.1)
-        now = time.monotonic()
+        now = time.time()
 
-        async with lock:
+        for room in list(rooms.values()):
+            if not room["started"]:
+                continue
+
+            mission = room["mission"]
+            players = room["players"]
+
             living = [
-                (pid, p) for pid, p in players.items()
-                if p["alive"]
+                p for p in players.values()
+                if p.get("alive", True)
+                and p["id"] not in mission["escaped"]
             ]
 
-            # 괴물은 가장 가까운 생존자를 추적한다.
-            if living and len(mission["escaped"]) < len(players):
+            if living:
                 monster = mission["monster"]
-                target_id, target = min(
+
+                target = min(
                     living,
-                    key=lambda item: distance(
-                        monster["x"], monster["z"],
-                        item[1]["x"], item[1]["z"]
-                    )
+                    key=lambda p: distance2d(
+                        (p["x"], p["z"]),
+                        (monster["x"], monster["z"]),
+                    ),
                 )
 
                 dx = target["x"] - monster["x"]
                 dz = target["z"] - monster["z"]
-                d = math.hypot(dx, dz)
+                dist = math.hypot(dx, dz)
 
-                if d > 0.001:
-                    speed = 2.15
-                    monster["x"] += dx / d * speed * 0.1
-                    monster["z"] += dz / d * speed * 0.1
+                if dist > 0.01:
+                    speed = (
+                        1.7 if mission["generator"]
+                        else 2.15
+                    )
 
-                if d < 1.65 and now - last_monster_attack > 1.2:
-                    last_monster_attack = now
-                    target["hp"] = max(0, target["hp"] - 25)
-                    target["last_damage"] = now
+                    monster["x"] += dx / dist * speed * 0.1
+                    monster["z"] += dz / dist * speed * 0.1
 
-                    if target["hp"] <= 0:
-                        target["alive"] = False
-                        target["respawn_at"] = now + 5.0
+                for p in living:
+                    monster_distance = distance2d(
+                        (p["x"], p["z"]),
+                        (monster["x"], monster["z"]),
+                    )
 
-            # 쓰러진 플레이어는 5초 후 다시 일어난다.
+                    if (
+                        monster_distance < 1.45
+                        and now - mission["monster_attack_at"] > 1.2
+                    ):
+                        p["hp"] = max(
+                            0,
+                            p.get("hp", 100) - 25,
+                        )
+
+                        mission["monster_attack_at"] = now
+
+                        if p["hp"] <= 0:
+                            p["alive"] = False
+                            p["respawn_at"] = now + 5.0
+
+                        break
+
             for p in players.values():
-                if not p["alive"] and now >= p["respawn_at"]:
+                if (
+                    not p.get("alive", True)
+                    and now >= p.get("respawn_at", now + 99)
+                ):
                     p["alive"] = True
                     p["hp"] = 100
-                    p["x"] = 0.0
-                    p["z"] = 14.0
+                    p["x"] = -2.0
+                    p["z"] = 15.0
+                    p["message"] = "의식이 돌아왔습니다."
 
-            state = public_state()
-            targets = list(connections.items())
-
-        dead_connections = []
-        for pid, ws in targets:
-            try:
-                await ws.send_json(state)
-            except Exception:
-                dead_connections.append(pid)
-
-        if dead_connections:
-            async with lock:
-                for pid in dead_connections:
-                    connections.pop(pid, None)
-                    players.pop(pid, None)
+            await broadcast_room(room)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(game_loop())
-    yield
-    task.cancel()
+
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="DEAD SECTOR",
+    lifespan=lifespan,
+)
 
 
 @app.get("/")
 async def index():
-    return FileResponse(BASE_DIR / "index.html")
+    path = os.path.join(
+        os.path.dirname(__file__),
+        "index.html",
+    )
+
+    return FileResponse(path)
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    pid = uuid.uuid4().hex[:10]
 
-    async with lock:
-        players[pid] = new_player("생존자-" + pid[:4])
-        connections[pid] = ws
+    pid = "".join(
+        random.choice(string.ascii_lowercase + string.digits)
+        for _ in range(10)
+    )
 
-    await ws.send_json({"type": "welcome", "id": pid})
+    clients[ws] = pid
+
+    await send_json(
+        ws,
+        {
+            "type": "connected",
+            "id": pid,
+        },
+    )
 
     try:
         while True:
-            data = await ws.receive_json()
-            if not isinstance(data, dict):
+            raw = await ws.receive_text()
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                await broadcast_error(
+                    ws,
+                    "잘못된 요청입니다.",
+                )
                 continue
 
-            async with lock:
-                p = players.get(pid)
-                if p is None:
-                    break
+            action = data.get("action")
+            pid = clients[ws]
 
-                action = data.get("type")
-
-                if action == "name":
-                    name = str(data.get("name", "생존자")).strip()
-                    p["name"] = name[:16] or "생존자"
+            # 방 만들기
+            if action == "create_room":
+                if room_for_player(pid):
+                    await broadcast_error(
+                        ws,
+                        "이미 방에 참가해 있습니다.",
+                    )
                     continue
 
-                if action == "move":
-                    if not p["alive"] or pid in mission["escaped"]:
+                player = {
+                    "id": pid,
+                    "ws": ws,
+                    "name": clean_name(data.get("name")),
+                    "color": clean_color(data.get("color")),
+                    "outfit": clean_outfit(data.get("outfit")),
+                    "x": -2.0,
+                    "z": 15.0,
+                    "yaw": 0.0,
+                    "hp": 100,
+                    "alive": True,
+                    "message": "",
+                }
+
+                code = make_room_code()
+
+                room = {
+                    "code": code,
+                    "host": pid,
+                    "started": False,
+                    "players": {
+                        pid: player,
+                    },
+                    "mission": new_mission(),
+                }
+
+                rooms[code] = room
+
+                await send_json(
+                    ws,
+                    {
+                        "type": "room_created",
+                        "code": code,
+                    },
+                )
+
+                await broadcast_room(room)
+
+            # 방 참가
+            elif action == "join_room":
+                if room_for_player(pid):
+                    await broadcast_error(
+                        ws,
+                        "먼저 현재 방에서 나가세요.",
+                    )
+                    continue
+
+                code = str(
+                    data.get("code", "")
+                ).strip().upper()
+
+                room = rooms.get(code)
+
+                if not room:
+                    await broadcast_error(
+                        ws,
+                        "해당 방 번호가 없습니다.",
+                    )
+                    continue
+
+                if room["started"]:
+                    await broadcast_error(
+                        ws,
+                        "이미 시작된 방입니다.",
+                    )
+                    continue
+
+                if len(room["players"]) >= ROOM_CAPACITY:
+                    await broadcast_error(
+                        ws,
+                        "방이 가득 찼습니다. 최대 4명입니다.",
+                    )
+                    continue
+
+                player = {
+                    "id": pid,
+                    "ws": ws,
+                    "name": clean_name(data.get("name")),
+                    "color": clean_color(data.get("color")),
+                    "outfit": clean_outfit(data.get("outfit")),
+                    "x": -2.0 + len(room["players"]) * 1.2,
+                    "z": 15.0,
+                    "yaw": 0.0,
+                    "hp": 100,
+                    "alive": True,
+                    "message": "",
+                }
+
+                room["players"][pid] = player
+
+                await send_json(
+                    ws,
+                    {
+                        "type": "joined_room",
+                        "code": code,
+                    },
+                )
+
+                await broadcast_room(room)
+
+            # 방장이 게임 시작
+            elif action == "start_game":
+                room = room_for_player(pid)
+
+                if not room:
+                    await broadcast_error(
+                        ws,
+                        "먼저 방을 만들어 주세요.",
+                    )
+
+                elif room["host"] != pid:
+                    await broadcast_error(
+                        ws,
+                        "방장만 게임을 시작할 수 있습니다.",
+                    )
+
+                elif room["started"]:
+                    await broadcast_error(
+                        ws,
+                        "게임이 이미 시작되었습니다.",
+                    )
+
+                else:
+                    room["started"] = True
+                    room["mission"] = new_mission()
+
+                    for i, p in enumerate(
+                        room["players"].values()
+                    ):
+                        p["x"] = -1.5 + i
+                        p["z"] = 15.0
+                        p["hp"] = 100
+                        p["alive"] = True
+                        p["yaw"] = 0.0
+
+                    await broadcast_room(room)
+
+            # 방 나가기
+            elif action == "leave_room":
+                room = remove_player(pid)
+
+                if room:
+                    await broadcast_room(room)
+
+                await send_json(
+                    ws,
+                    {
+                        "type": "left_room",
+                    },
+                )
+
+            # 플레이어 이동
+            elif action == "move":
+                room = room_for_player(pid)
+
+                if not room or not room["started"]:
+                    continue
+
+                p = room["players"].get(pid)
+
+                if (
+                    not p
+                    or not p.get("alive", True)
+                    or pid in room["mission"]["escaped"]
+                ):
+                    continue
+
+                try:
+                    x = float(data.get("x", p["x"]))
+                    z = float(data.get("z", p["z"]))
+                    yaw = float(data.get("yaw", p["yaw"]))
+
+                    if not all(
+                        math.isfinite(v)
+                        for v in (x, z, yaw)
+                    ):
                         continue
 
-                    try:
-                        x = float(data["x"])
-                        z = float(data["z"])
-                        yaw = float(data["yaw"])
-                    except (KeyError, ValueError, TypeError):
-                        continue
+                except (TypeError, ValueError):
+                    continue
 
-                    if not all(map(math.isfinite, [x, z, yaw])):
-                        continue
+                p["x"] = max(-18.0, min(18.0, x))
+                p["z"] = max(-18.0, min(18.0, z))
+                p["yaw"] = yaw
 
-                    # 서버 측 월드 경계 검사
-                    p["x"] = max(-18.0, min(18.0, x))
-                    p["z"] = max(-18.0, min(18.0, z))
-                    p["yaw"] = yaw
+            # 미션 상호작용
+            elif action == "interact":
+                room = room_for_player(pid)
 
-                elif action == "interact":
-                    if not p["alive"] or pid in mission["escaped"]:
-                        continue
+                if not room or not room["started"]:
+                    continue
 
-                    item = data.get("item")
+                p = room["players"].get(pid)
 
-                    if item == "fuse":
-                        for i, pos in enumerate(FUSE_POSITIONS):
-                            if i not in mission["fuses"] and near(p, pos):
-                                mission["fuses"].append(i)
-                                break
+                if not p or not p.get("alive", True):
+                    continue
 
-                    elif item == "generator":
+                mission = room["mission"]
+                item = data.get("item")
+
+                if item == "fuse":
+                    for i, pos in enumerate(FUSE_POSITIONS):
                         if (
-                            len(mission["fuses"]) == len(FUSE_POSITIONS)
-                            and near(p, GENERATOR_POS, 3.0)
+                            i not in mission["fuses"]
+                            and near(p, pos, 2.5)
                         ):
-                            mission["generator"] = True
+                            mission["fuses"].append(i)
+                            mission["message"] = (
+                                f"퓨즈 확보 "
+                                f"({len(mission['fuses'])}/3)"
+                            )
+                            break
 
-                    elif item == "keycard":
-                        if near(p, KEYCARD_POS, 2.5):
-                            mission["keycard"] = True
+                elif item == "generator":
+                    if (
+                        len(mission["fuses"]) == 3
+                        and near(p, GENERATOR_POS, 3.0)
+                    ):
+                        mission["generator"] = True
+                        mission["message"] = (
+                            "발전기 가동 완료. 키카드를 찾으세요."
+                        )
 
-                    elif item == "exit":
-                        if (
-                            mission["generator"]
-                            and mission["keycard"]
-                            and near(p, EXIT_POS, 3.0)
-                        ):
-                            mission["escaped"].append(pid)
+                elif item == "keycard":
+                    if near(p, KEYCARD_POS, 2.5):
+                        mission["keycard"] = True
+                        mission["message"] = (
+                            "키카드 확보. 출구로 이동하세요."
+                        )
 
-    except (WebSocketDisconnect, ValueError, TypeError):
+                elif item == "exit":
+                    if (
+                        mission["generator"]
+                        and mission["keycard"]
+                        and near(p, EXIT_POS, 3.0)
+                        and pid not in mission["escaped"]
+                    ):
+                        mission["escaped"].append(pid)
+                        mission["message"] = (
+                            f"{p['name']} 탈출 성공!"
+                        )
+
+                await broadcast_room(room)
+
+            # 방장이 대기실로 돌아가기
+            elif action == "restart_room":
+                room = room_for_player(pid)
+
+                if not room:
+                    await broadcast_error(
+                        ws,
+                        "방에 참가하지 않았습니다.",
+                    )
+
+                elif room["host"] != pid:
+                    await broadcast_error(
+                        ws,
+                        "방장만 다시 시작할 수 있습니다.",
+                    )
+
+                else:
+                    room["started"] = False
+                    room["mission"] = new_mission()
+                    await broadcast_room(room)
+
+    except WebSocketDisconnect:
         pass
+
+    except Exception as exc:
+        print("WebSocket error:", repr(exc))
+
     finally:
-        async with lock:
-            connections.pop(pid, None)
-            players.pop(pid, None)
+        pid = clients.pop(ws, None)
+
+        if pid:
+            room = remove_player(pid)
+
+            if room:
+                await broadcast_room(room)
