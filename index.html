@@ -1,485 +1,1492 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DEAD SECTOR</title>
+<meta name="viewport"
+ content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+
+<title>DEAD SECTOR: 지하 격리구역</title>
+
 <style>
-*{box-sizing:border-box}
-body{margin:0;overflow:hidden;background:#030606;color:#e6eee9;font-family:Arial,sans-serif}
-canvas{display:block}
-#hud{position:fixed;inset:0;pointer-events:none}
-#top{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;gap:12px}
-.panel{background:#07100ed9;border:1px solid #36443b;padding:12px 15px;border-radius:5px;backdrop-filter:blur(5px)}
-.brand{font-weight:900;letter-spacing:3px;color:#d6e3d8}
-.sub{font-size:11px;letter-spacing:2px;color:#8d9b91;margin-top:5px}
-#mission{position:absolute;top:110px;left:20px;width:260px;line-height:1.7;font-size:13px}
-#mission b{color:#a9c9ae}
-#bottom{position:absolute;left:20px;bottom:20px;display:flex;gap:10px;align-items:end}
-#hp{font-size:23px;font-weight:bold}
-#hpbar{height:5px;background:#27332b;width:160px;margin-top:7px}
-#hpfill{height:100%;width:100%;background:#b9d4b6}
-#prompt{position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:15px;text-shadow:0 2px 8px black}
-#cross{position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:#d9e8d9;box-shadow:0 0 5px white}
-#noise{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 15%,#000b 100%);mix-blend-mode:multiply}
-#overlay{position:fixed;inset:0;z-index:10;background:linear-gradient(#030606c9,#030606f2),radial-gradient(ellipse at center,#26332a,#030606 75%);display:flex;align-items:center;justify-content:center;padding:18px}
-.card{width:min(440px,100%);background:#09100c;border:1px solid #455349;padding:28px;border-radius:7px;box-shadow:0 20px 90px #000}
-h1{font-size:31px;letter-spacing:4px;margin:0;color:#e1e9e1}
-h2{font-size:15px;letter-spacing:3px;color:#b0bdb2;margin:10px 0 20px}
-p{color:#a6b3a8;line-height:1.7;font-size:14px}
-input,button{width:100%;padding:13px;background:#111b14;border:1px solid #526353;color:white;border-radius:4px;margin-top:9px;font-size:14px}
-button{cursor:pointer;background:#324735;font-weight:bold}
-button:hover{background:#45634a}
-.note{font-size:12px;color:#78867b}
-#danger{position:absolute;inset:0;border:0 solid #9d1c1c;transition:border-width .15s}
-#scare{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);font-weight:bold;color:#efb3a5;letter-spacing:4px;font-size:19px;text-align:center;text-shadow:0 0 15px #e11;display:none}
-#players{font-size:12px;line-height:1.7;color:#aab9ac;margin-top:8px}
-@media(max-width:600px){
- #mission{top:105px;width:200px;left:10px;font-size:12px}
- #top{top:10px;left:10px;right:10px}
- .panel{padding:9px}
- #bottom{left:10px;bottom:12px}
- h1{font-size:25px}
+:root {
+  --cyan: #7cecff;
+  --panel: rgba(8,13,18,.94);
+  --line: rgba(124,236,255,.3);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #030609;
+  color: #eafaff;
+  font-family: Arial, "Malgun Gothic", sans-serif;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  color: #eafaff;
+  background: #12212a;
+  border: 1px solid #3b7180;
+  border-radius: 8px;
+  padding: 11px 14px;
+}
+
+button:hover {
+  background: #1b3540;
+}
+
+button:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  display: none;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background: radial-gradient(
+    ellipse at center,
+    #15232b 0,
+    #070b10 55%,
+    #020304 100%
+  );
+  padding: 16px;
+}
+
+.panel {
+  width: min(540px, 100%);
+  max-height: 96dvh;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 0 45px #000;
+  padding: 22px;
+  border-radius: 14px;
+}
+
+.logo {
+  font-size: clamp(28px, 6vw, 46px);
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #eafaff;
+  text-shadow: 0 0 20px #39b8ce;
+}
+
+.sub {
+  color: #91a9b4;
+  font-size: 12px;
+  letter-spacing: 3px;
+  margin: 4px 0 22px;
+}
+
+h2 {
+  font-size: 16px;
+  margin: 18px 0 9px;
+  color: var(--cyan);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 0;
+}
+
+input, select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #344d58;
+  border-radius: 8px;
+  background: #080f14;
+  color: white;
+  margin: 4px 0;
+}
+
+.small {
+  font-size: 12px;
+  color: #8da4af;
+  line-height: 1.5;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.primary {
+  background: #15505b;
+  border-color: #54d6e8;
+  font-weight: bold;
+}
+
+.danger {
+  border-color: #9a4248;
+}
+
+.roomcode {
+  font-size: 32px;
+  letter-spacing: 8px;
+  text-align: center;
+  color: #fff;
+  font-weight: bold;
+  padding: 12px;
+  border: 1px dashed #57a8b8;
+  border-radius: 8px;
+}
+
+#lobbyPlayers {
+  padding: 8px;
+  background: #060b0f;
+  border-radius: 8px;
+  min-height: 42px;
+  line-height: 1.9;
+}
+
+.playerpill {
+  display: inline-block;
+  padding: 5px 9px;
+  margin: 3px;
+  border: 1px solid #34515b;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hudbox {
+  position: absolute;
+  background: rgba(0,0,0,.55);
+  border: 1px solid #31515d;
+  border-radius: 7px;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.tl {
+  top: 12px;
+  left: 12px;
+}
+
+.tr {
+  top: 12px;
+  right: 12px;
+  text-align: right;
+}
+
+.bottom {
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  min-width: 230px;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%,-50%);
+}
+
+.crosshair:before,
+.crosshair:after {
+  content: "";
+  position: absolute;
+  background: #d9fbff;
+  box-shadow: 0 0 5px #6eefff;
+}
+
+.crosshair:before {
+  width: 10px;
+  height: 1px;
+  top: 4px;
+}
+
+.crosshair:after {
+  width: 1px;
+  height: 10px;
+  left: 4px;
+}
+
+#toast {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: bold;
+  text-shadow: 0 2px 8px #000;
+  color: #c5f9ff;
+  font-size: 15px;
+  text-align: center;
+  width: 90%;
+}
+
+#mobileControls {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.joy {
+  position: absolute;
+  left: 22px;
+  bottom: 28px;
+  width: 138px;
+  height: 138px;
+  border: 2px solid #bdefff88;
+  border-radius: 50%;
+  background: #142a3666;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.knob {
+  position: absolute;
+  left: 40px;
+  top: 40px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: #bdefff88;
+  border: 1px solid #d9fbff;
+}
+
+.mButtons {
+  position: absolute;
+  right: 16px;
+  bottom: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.mButtons button {
+  width: 66px;
+  height: 58px;
+  border-radius: 50%;
+  background: #10242ccc;
+  border-color: #8cd8e8;
+  font-size: 12px;
+  padding: 4px;
+}
+
+.runBtn {
+  position: absolute;
+  right: 22px;
+  bottom: 175px;
+  pointer-events: auto;
+}
+
+#startOverlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #0009;
+  pointer-events: auto;
+}
+
+.overlaycard {
+  background: #080f14ed;
+  border: 1px solid #5c9ca9;
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+  max-width: 320px;
+}
+
+@media(max-width:700px) {
+  .panel {
+    padding: 16px;
+  }
+
+  .logo {
+    font-size: 30px;
+  }
+
+  #mobileControls {
+    display: block;
+  }
+
+  .bottom {
+    bottom: 178px;
+  }
+
+  .tl {
+    font-size: 11px;
+    max-width: 62%;
+  }
+
+  .tr {
+    font-size: 11px;
+  }
 }
 </style>
 </head>
+
 <body>
-<div id="hud">
-  <div id="top">
-    <div class="panel"><div class="brand">DEAD SECTOR</div><div class="sub">UNDERGROUND FACILITY · 09</div></div>
-    <div class="panel"><div id="connection">서버 연결 중...</div><div id="players">생존자: 0명</div></div>
-  </div>
-  <div id="mission" class="panel">
-    <b>탈출 임무</b>
-    <div id="tasks">서버 접속 대기 중...</div>
-  </div>
-  <div id="cross"></div>
-  <div id="prompt">클릭하여 시설 진입</div>
-  <div id="noise"></div>
-  <div id="danger"></div>
-  <div id="scare">DON'T LOOK BACK</div>
-  <div id="bottom">
-    <div class="panel"><div class="sub">VITAL SIGNS</div><div id="hp">100%</div><div id="hpbar"><div id="hpfill"></div></div></div>
-    <div class="panel"><div class="sub">EQUIPMENT</div><div id="battery">손전등: ON</div><div id="flashHint" class="note">F: 손전등</div></div>
+
+<div id="menu">
+  <div class="panel">
+    <div class="logo">DEAD SECTOR</div>
+    <div class="sub">
+      지하 격리구역 · CO-OP SURVIVAL HORROR
+    </div>
+
+    <section id="characterSection">
+      <h2>캐릭터 만들기</h2>
+
+      <div class="row">
+        <div>
+          <label class="small">캐릭터 이름</label>
+          <input id="playerName" maxlength="16" value="생존자">
+        </div>
+
+        <div>
+          <label class="small">복장</label>
+          <select id="outfit">
+            <option>보안요원</option>
+            <option>연구원</option>
+            <option>정비공</option>
+            <option>탐사복</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="small">캐릭터 색상</label>
+
+      <div class="row" id="colors">
+        <button data-color="#54d6ff">청색</button>
+        <button data-color="#ff5757">적색</button>
+        <button data-color="#a78bfa">보라</button>
+        <button data-color="#ffd166">황색</button>
+        <button data-color="#7ee081">녹색</button>
+      </div>
+    </section>
+
+    <section id="mainMenu">
+      <h2>작전실</h2>
+
+      <button class="primary" id="createBtn" style="width:100%">
+        새 방 만들기
+      </button>
+
+      <h2>방 번호로 참가</h2>
+
+      <div class="row">
+        <input id="joinCode" maxlength="5" placeholder="방 번호 5자리">
+        <button id="joinBtn">참가하기</button>
+      </div>
+
+      <p class="small">
+        최대 4명 · 방장은 게임 시작을 누를 수 있습니다.
+        혼자서도 플레이할 수 있습니다.
+      </p>
+    </section>
+
+    <section id="lobbySection" class="hidden">
+      <h2>대기실</h2>
+
+      <div class="roomcode" id="roomCode">-----</div>
+
+      <p class="small" style="text-align:center">
+        친구에게 방 번호를 알려주세요.
+      </p>
+
+      <h2>참가자</h2>
+      <div id="lobbyPlayers"></div>
+      <p id="hostHint" class="small"></p>
+
+      <div class="row" style="margin-top:12px">
+        <button id="startBtn" class="primary">게임 시작</button>
+        <button id="leaveBtn" class="danger">방 나가기</button>
+      </div>
+    </section>
+
+    <p id="menuMessage" class="small" role="status"></p>
   </div>
 </div>
 
-<div id="overlay">
-  <div class="card">
-    <h1>DEAD SECTOR</h1>
-    <h2>CHAPTER 01 — THE SILENT ZONE</h2>
-    <p>지하 격리구역에서 통신이 끊겼다.<br>동료를 찾아 전력을 복구하고, 출구를 열어 탈출하라.<br><br><b>무언가가 어둠 속에서 당신을 찾고 있다.</b></p>
-    <input id="name" maxlength="16" placeholder="생존자 이름" value="생존자">
-    <button id="start">시설 진입</button>
-    <p class="note">WASD 이동 · 마우스 시점 · E 상호작용 · F 손전등 · Shift 달리기</p>
-    <p class="note">3D 그래픽은 Three.js CDN을 사용합니다. 최초 접속 시 인터넷 연결이 필요합니다.</p>
+<div id="game">
+  <div id="hud">
+    <div class="hudbox tl">
+      <b>DEAD SECTOR</b>
+      <div id="missionText">대기 중</div>
+      <div id="hpText">체력: 100</div>
+    </div>
+
+    <div class="hudbox tr">
+      <div>WASD / 터치 이동</div>
+      <div>마우스 / 오른쪽 드래그: 시점</div>
+      <div>E: 상호작용 · F: 손전등 · Shift: 달리기</div>
+    </div>
+
+    <div class="crosshair"></div>
+    <div id="toast"></div>
+
+    <div class="hudbox bottom" id="objective">
+      퓨즈 3개를 찾아 발전기를 가동하세요.
+    </div>
+
+    <div id="mobileControls">
+      <div class="joy" id="joy">
+        <div class="knob" id="knob"></div>
+      </div>
+
+      <button class="runBtn" id="runButton">달리기</button>
+
+      <div class="mButtons">
+        <button id="interactButton">상호작용</button>
+        <button id="flashButton">손전등</button>
+        <button id="exitGameButton">메뉴</button>
+      </div>
+    </div>
+
+    <div id="startOverlay">
+      <div class="overlaycard">
+        <h2 id="overlayTitle">작전 종료</h2>
+        <p id="overlayText"></p>
+        <button id="backLobbyBtn">대기실로</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
+import * as THREE from
+  'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
 
 const $ = id => document.getElementById(id);
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x030605);
-scene.fog = new THREE.FogExp2(0x030605, 0.038);
 
-const camera = new THREE.PerspectiveCamera(76,innerWidth/innerHeight,0.1,100);
-camera.rotation.order = "YXZ";
+let selectedColor = '#54d6ff';
+let socket = null;
+let myId = null;
+let room = null;
+let isHost = false;
+let started = false;
 
-const renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-document.body.prepend(renderer.domElement);
+let scene, camera, renderer, clock;
+let playerGroup, monsterMesh, flashlight;
+let flashOn = true;
 
-scene.add(new THREE.HemisphereLight(0x8b9c8b,0x101510,0.42));
+let local = {
+  x: -2,
+  z: 15,
+  yaw: 0,
+  pitch: 0,
+  hp: 100,
+  alive: true
+};
 
-const flashlight = new THREE.SpotLight(0xe4f0dc,45,19,Math.PI/7,0.5,1.4);
-flashlight.castShadow = false;
-scene.add(flashlight);
-scene.add(flashlight.target);
+let keys = {};
+let lastSend = 0;
+let lastInteract = 0;
+let toastTimer = 0;
+let mobileRun = false;
 
-const ambientLights = [];
-function lamp(x,y,z,color=0xff3823){
-  const light = new THREE.PointLight(color,5,8,2);
-  light.position.set(x,y,z);
-  scene.add(light);
-  ambientLights.push({light,base:5,phase:Math.random()*6});
+let joy = {
+  active: false,
+  id: null,
+  cx: 0,
+  cy: 0,
+  x: 0,
+  y: 0
+};
+
+let look = {
+  active: false,
+  id: null,
+  x: 0,
+  y: 0
+};
+
+const avatarMeshes = new Map();
+const objectiveMeshes = [];
+
+const FUSE_POSITIONS = [
+  [-11, 7],
+  [11, 4],
+  [-8, -10]
+];
+
+const colliders = [];
+
+$('colors').addEventListener('click', e => {
+  const button = e.target.closest('button[data-color]');
+  if (!button) return;
+
+  selectedColor = button.dataset.color;
+
+  [...$('colors').querySelectorAll('button')].forEach(b => {
+    b.style.outline = b === button
+      ? '2px solid white'
+      : 'none';
+  });
+});
+
+$('createBtn').onclick = () => sendLobby('create_room');
+$('joinBtn').onclick = () => sendLobby('join_room');
+
+$('joinCode').addEventListener('input', e => {
+  e.target.value = e.target.value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 5);
+});
+
+$('startBtn').onclick = () => send({action:'start_game'});
+
+$('leaveBtn').onclick = () => {
+  send({action:'leave_room'});
+  showMainMenu();
+};
+
+$('exitGameButton').onclick = () => {
+  send({action:'leave_room'});
+  started = false;
+  room = null;
+  $('game').style.display = 'none';
+  showMainMenu();
+};
+
+$('backLobbyBtn').onclick = () => {
+  $('startOverlay').style.display = 'none';
+  $('game').style.display = 'none';
+  started = false;
+
+  if (isHost) {
+    send({action:'restart_room'});
+    $('menu').style.display = 'flex';
+    $('lobbySection').classList.remove('hidden');
+    $('mainMenu').classList.add('hidden');
+  } else {
+    send({action:'leave_room'});
+    room = null;
+    showMainMenu();
+  }
+};
+
+$('interactButton').onclick = interact;
+$('flashButton').onclick = toggleFlash;
+
+$('runButton').onpointerdown = () => mobileRun = true;
+$('runButton').onpointerup =
+$('runButton').onpointercancel = () => mobileRun = false;
+
+function send(data) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(data));
+  }
 }
-function material(color,roughness=0.85,metalness=0){
-  return new THREE.MeshStandardMaterial({color,roughness,metalness});
-}
-const concrete = material(0x303832);
-const floorMat = material(0x202721);
-const metal = material(0x414a43,0.55,0.65);
-const rust = material(0x654238);
-const dark = material(0x080c09);
-const green = material(0x688b67,0.4,0.25);
-const red = material(0xa12720,0.4,0.2);
-const gold = material(0xc9a65b,0.4,0.3);
 
-function box(x,y,z,w,h,d,mat,cast=true){
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+function sendLobby(action) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    connect(action);
+    return;
+  }
+
+  sendLobbyAction(action);
+}
+
+let pendingAction = null;
+
+function connect(action) {
+  pendingAction = action;
+
+  const protocol =
+    location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  socket = new WebSocket(
+    `${protocol}//${location.host}/ws`
+  );
+
+  socket.onopen = () => {
+    if (pendingAction) {
+      sendLobbyAction(pendingAction);
+      pendingAction = null;
+    }
+  };
+
+  socket.onmessage = event => {
+    let data;
+
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    handleMessage(data);
+  };
+
+  socket.onclose = () => {
+    showMessage('서버 연결이 끊어졌습니다. 새로고침해 주세요.');
+    started = false;
+  };
+
+  socket.onerror = () => {
+    showMessage('서버 연결에 실패했습니다. Render 상태를 확인하세요.');
+  };
+}
+
+function sendLobbyAction(action) {
+  const data = {
+    action,
+    name: $('playerName').value.trim() || '생존자',
+    color: selectedColor,
+    outfit: $('outfit').value
+  };
+
+  if (action === 'join_room') {
+    data.code = $('joinCode').value.trim();
+  }
+
+  send(data);
+}
+
+function showMessage(message) {
+  $('menuMessage').textContent = message;
+  showToast(message);
+}
+
+function showMainMenu() {
+  $('menu').style.display = 'flex';
+  $('mainMenu').classList.remove('hidden');
+  $('lobbySection').classList.add('hidden');
+  $('characterSection').classList.remove('hidden');
+}
+
+function showToast(message) {
+  $('toast').textContent = message;
+  toastTimer = 2.5;
+}
+
+function handleMessage(data) {
+  if (data.type === 'connected') {
+    myId = data.id;
+    return;
+  }
+
+  if (data.type === 'error') {
+    showMessage(data.message);
+    return;
+  }
+
+  if (
+    data.type === 'room_created' ||
+    data.type === 'joined_room'
+  ) {
+    $('roomCode').textContent = data.code;
+    $('mainMenu').classList.add('hidden');
+    $('characterSection').classList.add('hidden');
+    $('lobbySection').classList.remove('hidden');
+    $('menuMessage').textContent = '';
+  }
+
+  if (data.type === 'left_room') {
+    room = null;
+    return;
+  }
+
+  if (data.type === 'room_state') {
+    room = data.room;
+    isHost = room.host === myId;
+
+    renderLobby();
+
+    if (room.started && !started) {
+      startGame();
+    }
+
+    if (!room.started && started) {
+      started = false;
+      $('game').style.display = 'none';
+      $('menu').style.display = 'flex';
+      $('lobbySection').classList.remove('hidden');
+      $('mainMenu').classList.add('hidden');
+    }
+
+    if (room.started) {
+      applyNetworkState();
+    }
+  }
+}
+
+function renderLobby() {
+  if (!room) return;
+
+  $('roomCode').textContent = room.code;
+
+  $('lobbyPlayers').innerHTML = room.players.map(p => `
+    <span class="playerpill" style="border-color:${p.color}">
+      ${p.host ? '👑 ' : ''}
+      ${escapeHtml(p.name)} · ${escapeHtml(p.outfit)}
+    </span>
+  `).join('');
+
+  $('startBtn').disabled = !isHost || room.started;
+
+  $('startBtn').textContent = isHost
+    ? '게임 시작'
+    : '방장 시작 대기 중';
+
+  $('hostHint').textContent = isHost
+    ? '당신은 방장입니다. 혼자서도 시작할 수 있습니다.'
+    : '방장이 시작할 때까지 기다려 주세요.';
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function init3D() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x030609);
+  scene.fog = new THREE.FogExp2(0x030609, 0.035);
+
+  camera = new THREE.PerspectiveCamera(
+    75,
+    innerWidth / innerHeight,
+    0.1,
+    100
+  );
+
+  camera.rotation.order = 'YXZ';
+
+  renderer = new THREE.WebGLRenderer({
+    antialias: true
+  });
+
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  $('game').prepend(renderer.domElement);
+  renderer.domElement.style.touchAction = 'none';
+
+  scene.add(
+    new THREE.HemisphereLight(0x9bb6c4, 0x101217, 1.2)
+  );
+
+  const roomLight = new THREE.PointLight(0x6ebbd2, 1.5, 24);
+  roomLight.position.set(0, 4, 0);
+  scene.add(roomLight);
+
+  flashlight = new THREE.SpotLight(
+    0xc9f5ff,
+    35,
+    22,
+    Math.PI / 7,
+    0.45,
+    1.2
+  );
+
+  camera.add(flashlight);
+  flashlight.position.set(0, 0, 0);
+
+  flashlight.target.position.set(0, 0, -1);
+  camera.add(flashlight.target);
+  scene.add(camera);
+
+  buildMap();
+  buildAvatar();
+
+  clock = new THREE.Clock();
+
+  window.addEventListener('resize', onResize);
+
+  renderer.domElement.addEventListener('click', () => {
+    if (!isMobile()) {
+      renderer.domElement.requestPointerLock?.();
+    }
+  });
+
+  document.addEventListener('mousemove', event => {
+    if (document.pointerLockElement === renderer.domElement) {
+      local.yaw -= event.movementX * 0.0024;
+      local.pitch -= event.movementY * 0.0024;
+
+      local.pitch = Math.max(
+        -1.35,
+        Math.min(1.35, local.pitch)
+      );
+    }
+  });
+
+  renderer.domElement.addEventListener('pointerdown', event => {
+    if (
+      isMobile() &&
+      event.pointerType === 'touch' &&
+      !isUI(event.target)
+    ) {
+      look.active = true;
+      look.id = event.pointerId;
+      look.x = event.clientX;
+      look.y = event.clientY;
+    }
+  });
+
+  renderer.domElement.addEventListener('pointermove', event => {
+    if (look.active && event.pointerId === look.id) {
+      local.yaw -= (event.clientX - look.x) * 0.006;
+      local.pitch -= (event.clientY - look.y) * 0.006;
+
+      local.pitch = Math.max(
+        -1.35,
+        Math.min(1.35, local.pitch)
+      );
+
+      look.x = event.clientX;
+      look.y = event.clientY;
+    }
+  });
+
+  renderer.domElement.addEventListener('pointerup', event => {
+    if (event.pointerId === look.id) {
+      look.active = false;
+    }
+  });
+
+  animate();
+}
+
+function isMobile() {
+  return matchMedia('(pointer: coarse)').matches ||
+    innerWidth < 800;
+}
+
+function isUI(element) {
+  return Boolean(
+    element.closest('button,.joy,.mButtons,.runBtn')
+  );
+}
+
+function mat(color, roughness = 0.8) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness
+  });
+}
+
+function addBox(x,y,z,sx,sy,sz,color,solid=true) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(sx,sy,sz),
+    mat(color)
+  );
+
   mesh.position.set(x,y,z);
-  mesh.castShadow=cast;
-  mesh.receiveShadow=true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   scene.add(mesh);
+
+  if (solid) {
+    colliders.push({x,z,sx,sz});
+  }
+
   return mesh;
 }
 
-// 방과 외벽
-box(0,-0.25,0,40,0.5,40,floorMat,false);
-box(0,2, -20,40,4,0.7,concrete);
-box(0,2, 20,40,4,0.7,concrete);
-box(-20,2,0,0.7,4,40,concrete);
-box(20,2,0,0.7,4,40,concrete);
+function buildMap() {
+  addBox(0,-0.3,0,38,0.6,38,0x1a2429,false);
 
-// 기둥과 엄폐물. 중앙에는 이동 통로를 남겨 둔다.
-for(const [x,z,w,d] of [
- [-15,-14,2,2],[-15,-5,2,2],[-15,6,2,2],[-15,15,2,2],
- [15,-14,2,2],[15,-5,2,2],[15,6,2,2],[15,15,2,2],
- [-8,-15,3,1.5],[8,-15,3,1.5],
- [-8,15,3,1.5],[8,15,3,1.5],
- [-12,0,2,3],[12,0,2,3],[-5,-7,2,2],[7,8,2,2],
- [5,-5,2,2],[-6,9,2,2]
-]){
-  box(x,1.1,z,w,2.2,d,concrete);
-}
+  addBox(0,2,-19,38,4,0.5,0x273239);
+  addBox(0,2,19,38,4,0.5,0x273239);
+  addBox(-19,2,0,0.5,4,38,0x273239);
+  addBox(19,2,0,0.5,4,38,0x273239);
 
-// 천장 보와 케이블
-for(let z=-16;z<=16;z+=8){
-  box(0,3.8,z,39,0.25,0.35,metal,false);
-  box(-7,3.55,z,0.08,0.25,0.08,rust,false);
-  box(7,3.55,z,0.08,0.25,0.08,rust,false);
-}
-for(const [x,z] of [[-12,-12],[12,-12],[-12,12],[12,12],[0,0],[0,-16]]){
-  box(x,3.65,z,0.65,0.2,0.65,metal,false);
-  lamp(x,3.2,z,Math.random()>0.5?0xff3924:0x7aab9c);
-}
+  addBox(-5,1.6,-7,0.5,3,14,0x26343b);
+  addBox(6,1.6,5,0.5,3,14,0x26343b);
 
-// 시설 문과 비상 출구
-box(-2,1.5,-19,0.2,3,0.3,metal);
-box(2,1.5,-19,0.2,3,0.3,metal);
-const exitDoor = box(0,1.5,-19,3.7,3,0.45,rust);
-const exitLamp = new THREE.PointLight(0xff1e12,2,6);
-exitLamp.position.set(0,2.7,-18.5);
-scene.add(exitLamp);
+  addBox(0,1.6,9,10,0.3,0.4,0x36434a,false);
+  addBox(0,1,0,2,2,1.6,0x40545b,false);
+  addBox(0,1.5,-18.2,4,3,0.35,0x4b5960,false);
 
-// 바닥 배수관과 경고 줄무늬
-for(let x=-18;x<18;x+=2){
-  box(x,0.015,19,1,0.025,0.15, x%4===0?red:gold,false);
-}
-for(let z=-17;z<17;z+=4){
-  box(-19.2,1.8,z,0.06,0.08,1.4,gold,false);
-  box(19.2,1.8,z,0.06,0.08,1.4,gold,false);
-}
+  FUSE_POSITIONS.forEach((position,index) => {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35,0.35,0.35),
+      new THREE.MeshStandardMaterial({
+        color: 0xffd166,
+        emissive: 0x8a4d00,
+        emissiveIntensity: 1.3
+      })
+    );
 
-// 임무 물체
-function objective(x,z,label,color){
-  const group = new THREE.Group();
-  const base = new THREE.Mesh(new THREE.BoxGeometry(0.65,0.55,0.5),metal);
-  base.position.y=0.3;
-  group.add(base);
-  const glow = new THREE.Mesh(
-    new THREE.BoxGeometry(0.42,0.09,0.35),
-    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:2})
+    mesh.position.set(position[0],0.4,position[1]);
+    scene.add(mesh);
+
+    objectiveMeshes.push({
+      type:'fuse',
+      index,
+      mesh,
+      pos:position
+    });
+  });
+
+  const key = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35,0.1,0.5),
+    new THREE.MeshStandardMaterial({
+      color:0x54d6ff,
+      emissive:0x005b77,
+      emissiveIntensity:1.5
+    })
   );
-  glow.position.y=0.62;
-  group.add(glow);
-  group.position.set(x,0,z);
+
+  key.position.set(12,0.25,-11);
+  scene.add(key);
+
+  objectiveMeshes.push({
+    type:'keycard',
+    mesh:key,
+    pos:[12,-11]
+  });
+
+  const exit = new THREE.Mesh(
+    new THREE.BoxGeometry(2,2,0.25),
+    new THREE.MeshStandardMaterial({
+      color:0x225d64,
+      emissive:0x0b3941,
+      emissiveIntensity:0.8
+    })
+  );
+
+  exit.position.set(0,1,-17);
+  scene.add(exit);
+
+  objectiveMeshes.push({
+    type:'exit',
+    mesh:exit,
+    pos:[0,-17]
+  });
+
+  for (const [x,z] of [
+    [-12,-12],
+    [12,-12],
+    [-12,12],
+    [12,12],
+    [0,0]
+  ]) {
+    const lamp = new THREE.PointLight(0x4da3b4,1.1,9);
+    lamp.position.set(x,2.8,z);
+    scene.add(lamp);
+
+    addBox(x,3,z,0.3,0.12,0.3,0x8ddde6,false);
+  }
+}
+
+function buildAvatar() {
+  playerGroup = new THREE.Group();
+
+  const torso = new THREE.Mesh(
+    new THREE.BoxGeometry(0.55,0.75,0.28),
+    mat(selectedColor)
+  );
+
+  torso.position.y = 1.15;
+  playerGroup.add(torso);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22,12,10),
+    mat(0xc6a58d)
+  );
+
+  head.position.y = 1.72;
+  playerGroup.add(head);
+
+  for (const x of [-0.17,0.17]) {
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.19,0.55,0.22),
+      mat(0x202a31)
+    );
+
+    leg.position.set(x,0.42,0);
+    playerGroup.add(leg);
+  }
+
+  const backpack = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35,0.48,0.18),
+    mat(0x263b39)
+  );
+
+  backpack.position.set(0,1.2,0.22);
+  playerGroup.add(backpack);
+
+  scene.add(playerGroup);
+}
+
+function buildOtherAvatar(player) {
+  const group = new THREE.Group();
+
+  const torso = new THREE.Mesh(
+    new THREE.BoxGeometry(0.55,0.75,0.28),
+    mat(player.color || 0x54d6ff)
+  );
+
+  torso.position.y = 1.15;
+  group.add(torso);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22,12,10),
+    mat(0xc6a58d)
+  );
+
+  head.position.y = 1.72;
+  group.add(head);
+
+  for (const x of [-0.17,0.17]) {
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.19,0.55,0.22),
+      mat(0x202a31)
+    );
+
+    leg.position.set(x,0.42,0);
+    group.add(leg);
+  }
+
   scene.add(group);
-  group.userData.label=label;
-  group.userData.glow=glow;
   return group;
 }
-const fuseMeshes = [
- objective(-11,7,"퓨즈 A",0x8be8ff),
- objective(11,4,"퓨즈 B",0x8be8ff),
- objective(-8,-10,"퓨즈 C",0x8be8ff)
-];
-const cardMesh = objective(12,-11,"키카드",0x72ff8c);
-const genMesh = objective(0,0,"발전기",0xffb04a);
-const exitMesh = objective(0,-17,"출구 패널",0xff3930);
 
-function createMonster(){
- const group=new THREE.Group();
- const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.45,1.25,4,8),dark);
- body.position.y=1.1;
- body.castShadow=true;
- group.add(body);
- const head=new THREE.Mesh(new THREE.SphereGeometry(0.37,12,12),material(0x171b18));
- head.position.y=2.05;
- group.add(head);
- for(const x of [-0.14,0.14]){
-  const eye=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8),
-    new THREE.MeshBasicMaterial({color:0xff1717}));
-  eye.position.set(x,2.08,-0.32);
-  group.add(eye);
- }
- const armMat=material(0x111612);
- for(const x of [-0.52,0.52]){
-  const arm=new THREE.Mesh(new THREE.CapsuleGeometry(0.12,0.9,3,6),armMat);
-  arm.position.set(x,1.1,0);
-  arm.rotation.z=x<0?-0.15:0.15;
-  group.add(arm);
- }
- scene.add(group);
- return group;
-}
-const monsterMesh=createMonster();
-monsterMesh.visible=false;
+function applyNetworkState() {
+  if (!room || !started || !room.mission) return;
 
-// 플레이어 아바타
-const avatarMeshes=new Map();
-const avatarMatBlue=material(0x527a86);
-const avatarMatRed=material(0x987b66);
-function createAvatar(id){
- const group=new THREE.Group();
- const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.28,0.8,3,6),avatarMatBlue);
- body.position.y=0.8;
- group.add(body);
- const head=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),material(0x8c9788));
- head.position.y=1.45;
- group.add(head);
- scene.add(group);
- avatarMeshes.set(id,group);
- return group;
-}
+  const mission = room.mission;
+  const me = room.players.find(p => p.id === myId);
 
-let ws=null,myId=null,joined=false,locked=false,flashOn=true;
-let yaw=0,pitch=0,hp=100,lastSend=0,lastFrame=performance.now();
-let lastScare=0;
-let state=null;
-const keys={};
-const position=new THREE.Vector3(0,0,14);
-const direction=new THREE.Vector3();
-const moveSpeed=3.3;
+  if (me) {
+    // 네트워크 갱신 때 내 위치를 덮어쓰지 않아
+    // WASD 이동이 끊기는 현상을 방지한다.
+    local.hp = me.hp || 100;
+    local.alive = me.alive !== false;
 
-function connect(){
- const proto=location.protocol==="https:"?"wss:":"ws:";
- ws=new WebSocket(proto+"//"+location.host+"/ws");
- ws.onopen=()=>{
-  $("connection").textContent="● 시설 연결됨";
-  $("connection").style.color="#9bd8a6";
-  ws.send(JSON.stringify({type:"name",name:$("name").value.trim()||"생존자"}));
- };
- ws.onmessage=e=>{
-  const data=JSON.parse(e.data);
-  if(data.type==="welcome"){myId=data.id;return;}
-  if(data.type==="state"){state=data;updateState();}
- };
- ws.onclose=()=>{
-  $("connection").textContent="연결 끊김 — 새로고침 필요";
-  $("connection").style.color="#ff8585";
- };
- ws.onerror=()=>{$("connection").textContent="서버 오류";};
-}
-function send(obj){
- if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(obj));
-}
-
-$("start").onclick=()=>{
- if(joined)return;
- joined=true;
- $("overlay").style.display="none";
- connect();
- requestLock();
-};
-function requestLock(){
- renderer.domElement.requestPointerLock?.();
-}
-renderer.domElement.addEventListener("click",()=>{
- if(joined&&!locked)requestLock();
-});
-document.addEventListener("pointerlockchange",()=>{
- locked=document.pointerLockElement===renderer.domElement;
- $("prompt").textContent=locked?"":"클릭하여 시점 조작";
-});
-document.addEventListener("mousemove",e=>{
- if(!locked)return;
- yaw-=e.movementX*0.0022;
- pitch-=e.movementY*0.0022;
- pitch=Math.max(-1.25,Math.min(1.25,pitch));
-});
-document.addEventListener("keydown",e=>{
- keys[e.code]=true;
- if(["KeyW","KeyA","KeyS","KeyD","Space","ShiftLeft"].includes(e.code))e.preventDefault();
- if(e.repeat)return;
- if(e.code==="KeyF"){flashOn=!flashOn;flashlight.visible=flashOn;}
- if(e.code==="KeyE")interact();
-});
-document.addEventListener("keyup",e=>keys[e.code]=false);
-document.addEventListener("pointerlockerror",()=>{$("prompt").textContent="화면을 클릭해 시점 조작";});
-
-function nearestObjective(){
- if(!state)return null;
- const m=state.mission;
- const candidates=[];
- for(let i=0;i<3;i++){
-  if(!m.fuses.includes(i))candidates.push({kind:"fuse",pos:m.fuse_positions[i],name:"퓨즈 "+String.fromCharCode(65+i)});
- }
- if(!m.keycard)candidates.push({kind:"keycard",pos:m.keycard_pos,name:"키카드"});
- if(!m.generator)candidates.push({kind:"generator",pos:m.generator_pos,name:"발전기"});
- if(m.generator&&m.keycard&&!m.escaped.includes(myId))candidates.push({kind:"exit",pos:m.exit_pos,name:"출구 패널"});
- let best=null,bestD=2.7;
- for(const c of candidates){
-  const d=Math.hypot(position.x-c.pos[0],position.z-c.pos[1]);
-  if(d<bestD){best=c;bestD=d;}
- }
- return best;
-}
-function interact(){
- const obj=nearestObjective();
- if(!obj){$("prompt").textContent="상호작용 가능한 물체가 가까이 없습니다";return;}
- send({type:"interact",item:obj.kind});
-}
-function updateState(){
- if(!state)return;
- const m=state.mission;
- const alive=Object.values(state.players).filter(p=>p.alive).length;
- $("players").textContent="생존자: "+alive+"명";
- const tasks=[
-  (m.fuses.length===3?"✓":"□")+" 퓨즈 수집 ("+m.fuses.length+"/3)",
-  (m.generator?"✓":"□")+" 발전기 복구",
-  (m.keycard?"✓":"□")+" 키카드 확보",
-  (m.escaped.includes(myId)?"✓":"□")+" 지하 출구 탈출"
- ];
- $("tasks").innerHTML=tasks.join("<br>");
- const me=state.players[myId];
- if(me){
-  hp=me.hp;
-  $("hp").textContent=hp+"%";
-  $("hpfill").style.width=hp+"%";
-  $("hpfill").style.background=hp<35?"#c83e35":"#b9d4b6";
-  if(!me.alive)$("prompt").textContent="의식 상실 — 5초 후 깨어납니다";
-  else if(!locked)$("prompt").textContent="클릭하여 시점 조작";
-  else{
-   const obj=nearestObjective();
-   $("prompt").textContent=obj?"[E] "+obj.name+" 상호작용":"";
+    $('hpText').textContent =
+      `체력: ${local.hp}${local.alive ? '' : ' · 의식 없음'}`;
   }
- }
- for(const [id,p] of Object.entries(state.players)){
-  if(id===myId)continue;
-  let a=avatarMeshes.get(id);
-  if(!a)a=createAvatar(id);
-  a.visible=p.alive;
-  a.position.set(p.x,0,p.z);
-  a.rotation.y=p.yaw;
-  a.children[0].material=p.hp<35?avatarMatRed:avatarMatBlue;
- }
- for(const [id,a] of avatarMeshes){
-  if(!state.players[id]){scene.remove(a);avatarMeshes.delete(id);}
- }
- if(m.escaped.includes(myId)){
-  $("prompt").textContent="탈출 성공! 팀원들을 기다리세요.";
- }
- if(m.escaped.length>0&&m.escaped.length===Object.keys(state.players).length){
-  $("prompt").textContent="생존자 전원 탈출 성공";
- }
-}
 
-function collides(x,z){
- // 벽과 간단한 기둥 충돌 검사
- if(x<-18.1||x>18.1||z<-18.1||z>18.1)return true;
- const blocks=[
- [-15,-14,1.15],[-15,-5,1.15],[-15,6,1.15],[-15,15,1.15],
- [15,-14,1.15],[15,-5,1.15],[15,6,1.15],[15,15,1.15],
- [-12,0,1.6],[12,0,1.6],[-5,-7,1.35],[7,8,1.35],
- [5,-5,1.35],[-6,9,1.35]
- ];
- return blocks.some(([bx,bz,r])=>Math.hypot(x-bx,z-bz)<r);
-}
+  const present = new Set();
 
-function move(dt){
- if(!locked||!state)return;
- const me=state.players[myId];
- if(!me||!me.alive||state.mission.escaped.includes(myId))return;
- let forward=0,side=0;
- if(keys.KeyW||keys.ArrowUp)forward++;
- if(keys.KeyS||keys.ArrowDown)forward--;
- if(keys.KeyD||keys.ArrowRight)side++;
- if(keys.KeyA||keys.ArrowLeft)side--;
- const length=Math.hypot(forward,side);
- if(length>0){forward/=length;side/=length;}
- const speed=keys.ShiftLeft?5.1:moveSpeed;
- const dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt;
- const dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*speed*dt;
- if(!collides(position.x+dx,position.z))position.x+=dx;
- if(!collides(position.x,position.z+dz))position.z+=dz;
-}
+  for (const player of room.players) {
+    if (player.id === myId) continue;
 
-function updateCamera(){
- camera.position.set(position.x,1.65,position.z);
- camera.rotation.set(pitch,yaw,0,"YXZ");
- const forward=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
- flashlight.position.copy(camera.position);
- flashlight.target.position.copy(camera.position).add(forward.multiplyScalar(8));
-}
+    present.add(player.id);
 
-function animate(now){
- requestAnimationFrame(animate);
- const dt=Math.min((now-lastFrame)/1000,0.05);
- lastFrame=now;
- move(dt);
- updateCamera();
+    let group = avatarMeshes.get(player.id);
 
- if(state){
-  const m=state.mission;
-  monsterMesh.visible=true;
-  monsterMesh.position.set(m.monster.x,0,m.monster.z);
-  monsterMesh.lookAt(position.x,0,position.z);
-  monsterMesh.position.y=0;
-  const d=Math.hypot(position.x-m.monster.x,position.z-m.monster.z);
-  const t=performance.now()/1000;
-  monsterMesh.scale.y=1+Math.sin(t*6)*0.025;
-  if(d<6&&t-lastScare>8){
-   lastScare=t;
-   $("scare").style.display="block";
-   setTimeout(()=>$("scare").style.display="none",1100);
+    if (!group) {
+      group = buildOtherAvatar(player);
+      avatarMeshes.set(player.id, group);
+    }
+
+    group.position.set(player.x,0,player.z);
+    group.rotation.y = player.yaw || 0;
   }
-  $("danger").style.borderWidth=d<5?"18px":"0px";
-  $("danger").style.borderColor="rgba(150,0,0,"+(Math.max(0,1-d/6)*0.65)+")";
 
-  for(let i=0;i<3;i++){
-   fuseMeshes[i].visible=!m.fuses.includes(i);
-   fuseMeshes[i].rotation.y=t*0.5;
+  for (const [id,group] of avatarMeshes) {
+    if (!present.has(id)) {
+      scene.remove(group);
+      avatarMeshes.delete(id);
+    }
   }
-  cardMesh.visible=!m.keycard;
-  genMesh.visible=!m.generator;
-  exitMesh.visible=!(m.generator&&m.keycard);
-  exitDoor.visible=!(m.generator&&m.keycard);
-  exitLamp.color.set(m.generator&&m.keycard?0x49ff75:0xff1e12);
-  exitLamp.intensity=m.generator&&m.keycard?8:2;
 
-  if(now-lastSend>50){
-   lastSend=now;
-   send({type:"move",x:position.x,z:position.z,yaw});
+  if (monsterMesh) {
+    monsterMesh.position.set(
+      mission.monster.x,
+      0,
+      mission.monster.z
+    );
   }
- }
- for(const item of [cardMesh,genMesh,exitMesh,...fuseMeshes]){
-  if(item.visible){
-   item.position.y=0.06+Math.sin(now/350+item.position.x)*0.08;
-   item.children[1].material.emissiveIntensity=1.6+Math.sin(now/220)*0.5;
+
+  objectiveMeshes.forEach(objective => {
+    if (objective.type === 'fuse') {
+      objective.mesh.visible =
+        !mission.fuses.includes(objective.index);
+    }
+
+    if (objective.type === 'keycard') {
+      objective.mesh.visible = !mission.keycard;
+    }
+
+    if (objective.type === 'exit') {
+      objective.mesh.material.color.set(
+        mission.generator && mission.keycard
+          ? 0x55ff99
+          : 0x225d64
+      );
+    }
+  });
+
+  const text =
+    `퓨즈 ${mission.fuses.length}/3 · ` +
+    `발전기 ${mission.generator ? '가동' : '정지'} · ` +
+    `키카드 ${mission.keycard ? '확보' : '미확보'}`;
+
+  $('missionText').textContent = text;
+  $('objective').textContent = mission.message || text;
+
+  if (mission.escaped.includes(myId)) {
+    showOverlay(
+      '탈출 성공',
+      '격리구역에서 탈출했습니다.'
+    );
   }
- }
- for(const item of ambientLights){
-  const flicker=Math.random()<0.025?Math.random()*0.35:1;
-  item.light.intensity=item.base*flicker;
- }
- $("battery").textContent="손전등: "+(flashOn?"ON":"OFF");
- renderer.render(scene,camera);
 }
-addEventListener("resize",()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
+
+function startGame() {
+  started = true;
+
+  $('menu').style.display = 'none';
+  $('game').style.display = 'block';
+  $('startOverlay').style.display = 'none';
+
+  if (!renderer) {
+    init3D();
+  }
+
+  local.x = -2;
+  local.z = 15;
+  local.hp = 100;
+  local.alive = true;
+
+  if (!monsterMesh) {
+    monsterMesh = new THREE.Group();
+
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(0.85,1.8,0.55),
+      mat(0x160c10)
+    );
+
+    body.position.y = 1;
+    monsterMesh.add(body);
+
+    const eyes = new THREE.Mesh(
+      new THREE.BoxGeometry(0.25,0.1,0.08),
+      new THREE.MeshBasicMaterial({color:0xff172b})
+    );
+
+    eyes.position.set(0,1.45,-0.29);
+    monsterMesh.add(eyes);
+
+    scene.add(monsterMesh);
+  }
+
+  camera.position.set(local.x,1.62,local.z);
+  camera.rotation.set(local.pitch,local.yaw,0,'YXZ');
+
+  showToast('격리구역에 진입했습니다. 퓨즈 3개를 찾으세요.');
+  applyNetworkState();
+}
+
+function showOverlay(title,text) {
+  $('startOverlay').style.display = 'flex';
+  $('overlayTitle').textContent = title;
+  $('overlayText').textContent = text;
+}
+
+function onResize() {
+  if (!camera || !renderer) return;
+
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+}
+
+function blocked(x,z) {
+  if (
+    x < -17.2 || x > 17.2 ||
+    z < -17.2 || z > 17.2
+  ) {
+    return true;
+  }
+
+  const blocks = [
+    {x:-5,z:-7,sx:0.5,sz:14},
+    {x:6,z:5,sx:0.5,sz:14}
+  ];
+
+  return blocks.some(block =>
+    Math.abs(x-block.x) < block.sx/2+0.38 &&
+    Math.abs(z-block.z) < block.sz/2+0.38
+  );
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (!renderer || !started) return;
+
+  const dt = Math.min(clock.getDelta(),0.05);
+
+  if (local.alive) {
+    let forward =
+      (keys.KeyW || keys.ArrowUp ? 1 : 0) -
+      (keys.KeyS || keys.ArrowDown ? 1 : 0) -
+      joy.y;
+
+    let side =
+      (keys.KeyD || keys.ArrowRight ? 1 : 0) -
+      (keys.KeyA || keys.ArrowLeft ? 1 : 0) +
+      joy.x;
+
+    const length = Math.hypot(forward,side);
+
+    if (length > 1) {
+      forward /= length;
+      side /= length;
+    }
+
+    const running =
+      keys.ShiftLeft || keys.ShiftRight || mobileRun;
+
+    const speed = running ? 5.5 : 3.3;
+
+    const dx = (
+      -Math.sin(local.yaw) * forward +
+      Math.cos(local.yaw) * side
+    ) * speed * dt;
+
+    const dz = (
+      -Math.cos(local.yaw) * forward -
+      Math.sin(local.yaw) * side
+    ) * speed * dt;
+
+    if (!blocked(local.x+dx,local.z)) {
+      local.x += dx;
+    }
+
+    if (!blocked(local.x,local.z+dz)) {
+      local.z += dz;
+    }
+  }
+
+  camera.position.set(
+    local.x,
+    local.alive ? 1.62 : 0.8,
+    local.z
+  );
+
+  camera.rotation.set(
+    local.pitch,
+    local.yaw,
+    0,
+    'YXZ'
+  );
+
+  if (playerGroup) {
+    playerGroup.position.set(local.x,0,local.z);
+    playerGroup.rotation.y = local.yaw;
+  }
+
+  const now = performance.now();
+
+  if (now-lastSend > 60) {
+    send({
+      action:'move',
+      x:local.x,
+      z:local.z,
+      yaw:local.yaw
+    });
+
+    lastSend = now;
+  }
+
+  if (toastTimer > 0) {
+    toastTimer -= dt;
+
+    if (toastTimer <= 0) {
+      $('toast').textContent = '';
+    }
+  }
+
+  renderer.render(scene,camera);
+}
+
+document.addEventListener('keydown',event => {
+  if ([
+    'KeyW','KeyA','KeyS','KeyD',
+    'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+    'Space'
+  ].includes(event.code)) {
+    event.preventDefault();
+  }
+
+  keys[event.code] = true;
+
+  if (event.code === 'KeyE') interact();
+  if (event.code === 'KeyF') toggleFlash();
 });
-requestAnimationFrame(animate);
+
+document.addEventListener('keyup',event => {
+  keys[event.code] = false;
+});
+
+window.addEventListener('blur',() => {
+  keys = {};
+  mobileRun = false;
+});
+
+function toggleFlash() {
+  flashOn = !flashOn;
+
+  if (flashlight) {
+    flashlight.visible = flashOn;
+  }
+
+  showToast(flashOn ? '손전등 켜짐' : '손전등 꺼짐');
+}
+
+function interact() {
+  if (!started || !room || !room.mission) return;
+
+  const now = performance.now();
+
+  if (now-lastInteract < 450) return;
+
+  lastInteract = now;
+
+  const mission = room.mission;
+
+  const nearObj = (position,radius=2.7) =>
+    Math.hypot(
+      local.x-position[0],
+      local.z-position[1]
+    ) < radius;
+
+  const fuseIndex = FUSE_POSITIONS.findIndex(
+    (position,index) =>
+      !mission.fuses.includes(index) &&
+      nearObj(position)
+  );
+
+  if (fuseIndex >= 0) {
+    send({action:'interact',item:'fuse'});
+    showToast('퓨즈를 확보하는 중...');
+    return;
+  }
+
+  if (
+    mission.fuses.length === 3 &&
+    !mission.generator &&
+    nearObj([0,0],3.2)
+  ) {
+    send({action:'interact',item:'generator'});
+    showToast('발전기를 가동합니다...');
+    return;
+  }
+
+  if (
+    !mission.keycard &&
+    nearObj([12,-11])
+  ) {
+    send({action:'interact',item:'keycard'});
+    showToast('키카드를 확보합니다...');
+    return;
+  }
+
+  if (
+    mission.generator &&
+    mission.keycard &&
+    nearObj([0,-17],3.2)
+  ) {
+    send({action:'interact',item:'exit'});
+    showToast('출구를 개방합니다...');
+    return;
+  }
+
+  showToast('주변에 상호작용할 물체가 없습니다.');
+}
+
+// 모바일 가상 조이스틱
+$('joy').addEventListener('pointerdown',event => {
+  joy.active = true;
+  joy.id = event.pointerId;
+
+  const rect = $('joy').getBoundingClientRect();
+
+  joy.cx = rect.left + rect.width/2;
+  joy.cy = rect.top + rect.height/2;
+
+  $('joy').setPointerCapture(event.pointerId);
+  updateJoy(event);
+});
+
+$('joy').addEventListener('pointermove',event => {
+  if (joy.active && event.pointerId === joy.id) {
+    updateJoy(event);
+  }
+});
+
+function updateJoy(event) {
+  let dx = event.clientX - joy.cx;
+  let dy = event.clientY - joy.cy;
+
+  const max = 43;
+  const length = Math.hypot(dx,dy);
+
+  if (length > max) {
+    dx = dx/length*max;
+    dy = dy/length*max;
+  }
+
+  joy.x = dx/max;
+  joy.y = dy/max;
+
+  $('knob').style.transform =
+    `translate(${dx}px,${dy}px)`;
+}
+
+function resetJoy() {
+  joy.active = false;
+  joy.x = 0;
+  joy.y = 0;
+
+  $('knob').style.transform = 'translate(0,0)';
+}
+
+$('joy').addEventListener('pointerup',resetJoy);
+$('joy').addEventListener('pointercancel',resetJoy);
 </script>
 </body>
 </html>
