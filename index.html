@@ -1,0 +1,485 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEAD SECTOR</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#030606;color:#e6eee9;font-family:Arial,sans-serif}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;gap:12px}
+.panel{background:#07100ed9;border:1px solid #36443b;padding:12px 15px;border-radius:5px;backdrop-filter:blur(5px)}
+.brand{font-weight:900;letter-spacing:3px;color:#d6e3d8}
+.sub{font-size:11px;letter-spacing:2px;color:#8d9b91;margin-top:5px}
+#mission{position:absolute;top:110px;left:20px;width:260px;line-height:1.7;font-size:13px}
+#mission b{color:#a9c9ae}
+#bottom{position:absolute;left:20px;bottom:20px;display:flex;gap:10px;align-items:end}
+#hp{font-size:23px;font-weight:bold}
+#hpbar{height:5px;background:#27332b;width:160px;margin-top:7px}
+#hpfill{height:100%;width:100%;background:#b9d4b6}
+#prompt{position:absolute;left:50%;top:58%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:15px;text-shadow:0 2px 8px black}
+#cross{position:absolute;left:50%;top:50%;width:4px;height:4px;border-radius:50%;background:#d9e8d9;box-shadow:0 0 5px white}
+#noise{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 15%,#000b 100%);mix-blend-mode:multiply}
+#overlay{position:fixed;inset:0;z-index:10;background:linear-gradient(#030606c9,#030606f2),radial-gradient(ellipse at center,#26332a,#030606 75%);display:flex;align-items:center;justify-content:center;padding:18px}
+.card{width:min(440px,100%);background:#09100c;border:1px solid #455349;padding:28px;border-radius:7px;box-shadow:0 20px 90px #000}
+h1{font-size:31px;letter-spacing:4px;margin:0;color:#e1e9e1}
+h2{font-size:15px;letter-spacing:3px;color:#b0bdb2;margin:10px 0 20px}
+p{color:#a6b3a8;line-height:1.7;font-size:14px}
+input,button{width:100%;padding:13px;background:#111b14;border:1px solid #526353;color:white;border-radius:4px;margin-top:9px;font-size:14px}
+button{cursor:pointer;background:#324735;font-weight:bold}
+button:hover{background:#45634a}
+.note{font-size:12px;color:#78867b}
+#danger{position:absolute;inset:0;border:0 solid #9d1c1c;transition:border-width .15s}
+#scare{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);font-weight:bold;color:#efb3a5;letter-spacing:4px;font-size:19px;text-align:center;text-shadow:0 0 15px #e11;display:none}
+#players{font-size:12px;line-height:1.7;color:#aab9ac;margin-top:8px}
+@media(max-width:600px){
+ #mission{top:105px;width:200px;left:10px;font-size:12px}
+ #top{top:10px;left:10px;right:10px}
+ .panel{padding:9px}
+ #bottom{left:10px;bottom:12px}
+ h1{font-size:25px}
+}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="top">
+    <div class="panel"><div class="brand">DEAD SECTOR</div><div class="sub">UNDERGROUND FACILITY · 09</div></div>
+    <div class="panel"><div id="connection">서버 연결 중...</div><div id="players">생존자: 0명</div></div>
+  </div>
+  <div id="mission" class="panel">
+    <b>탈출 임무</b>
+    <div id="tasks">서버 접속 대기 중...</div>
+  </div>
+  <div id="cross"></div>
+  <div id="prompt">클릭하여 시설 진입</div>
+  <div id="noise"></div>
+  <div id="danger"></div>
+  <div id="scare">DON'T LOOK BACK</div>
+  <div id="bottom">
+    <div class="panel"><div class="sub">VITAL SIGNS</div><div id="hp">100%</div><div id="hpbar"><div id="hpfill"></div></div></div>
+    <div class="panel"><div class="sub">EQUIPMENT</div><div id="battery">손전등: ON</div><div id="flashHint" class="note">F: 손전등</div></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>DEAD SECTOR</h1>
+    <h2>CHAPTER 01 — THE SILENT ZONE</h2>
+    <p>지하 격리구역에서 통신이 끊겼다.<br>동료를 찾아 전력을 복구하고, 출구를 열어 탈출하라.<br><br><b>무언가가 어둠 속에서 당신을 찾고 있다.</b></p>
+    <input id="name" maxlength="16" placeholder="생존자 이름" value="생존자">
+    <button id="start">시설 진입</button>
+    <p class="note">WASD 이동 · 마우스 시점 · E 상호작용 · F 손전등 · Shift 달리기</p>
+    <p class="note">3D 그래픽은 Three.js CDN을 사용합니다. 최초 접속 시 인터넷 연결이 필요합니다.</p>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
+
+const $ = id => document.getElementById(id);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030605);
+scene.fog = new THREE.FogExp2(0x030605, 0.038);
+
+const camera = new THREE.PerspectiveCamera(76,innerWidth/innerHeight,0.1,100);
+camera.rotation.order = "YXZ";
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.body.prepend(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x8b9c8b,0x101510,0.42));
+
+const flashlight = new THREE.SpotLight(0xe4f0dc,45,19,Math.PI/7,0.5,1.4);
+flashlight.castShadow = false;
+scene.add(flashlight);
+scene.add(flashlight.target);
+
+const ambientLights = [];
+function lamp(x,y,z,color=0xff3823){
+  const light = new THREE.PointLight(color,5,8,2);
+  light.position.set(x,y,z);
+  scene.add(light);
+  ambientLights.push({light,base:5,phase:Math.random()*6});
+}
+function material(color,roughness=0.85,metalness=0){
+  return new THREE.MeshStandardMaterial({color,roughness,metalness});
+}
+const concrete = material(0x303832);
+const floorMat = material(0x202721);
+const metal = material(0x414a43,0.55,0.65);
+const rust = material(0x654238);
+const dark = material(0x080c09);
+const green = material(0x688b67,0.4,0.25);
+const red = material(0xa12720,0.4,0.2);
+const gold = material(0xc9a65b,0.4,0.3);
+
+function box(x,y,z,w,h,d,mat,cast=true){
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  mesh.position.set(x,y,z);
+  mesh.castShadow=cast;
+  mesh.receiveShadow=true;
+  scene.add(mesh);
+  return mesh;
+}
+
+// 방과 외벽
+box(0,-0.25,0,40,0.5,40,floorMat,false);
+box(0,2, -20,40,4,0.7,concrete);
+box(0,2, 20,40,4,0.7,concrete);
+box(-20,2,0,0.7,4,40,concrete);
+box(20,2,0,0.7,4,40,concrete);
+
+// 기둥과 엄폐물. 중앙에는 이동 통로를 남겨 둔다.
+for(const [x,z,w,d] of [
+ [-15,-14,2,2],[-15,-5,2,2],[-15,6,2,2],[-15,15,2,2],
+ [15,-14,2,2],[15,-5,2,2],[15,6,2,2],[15,15,2,2],
+ [-8,-15,3,1.5],[8,-15,3,1.5],
+ [-8,15,3,1.5],[8,15,3,1.5],
+ [-12,0,2,3],[12,0,2,3],[-5,-7,2,2],[7,8,2,2],
+ [5,-5,2,2],[-6,9,2,2]
+]){
+  box(x,1.1,z,w,2.2,d,concrete);
+}
+
+// 천장 보와 케이블
+for(let z=-16;z<=16;z+=8){
+  box(0,3.8,z,39,0.25,0.35,metal,false);
+  box(-7,3.55,z,0.08,0.25,0.08,rust,false);
+  box(7,3.55,z,0.08,0.25,0.08,rust,false);
+}
+for(const [x,z] of [[-12,-12],[12,-12],[-12,12],[12,12],[0,0],[0,-16]]){
+  box(x,3.65,z,0.65,0.2,0.65,metal,false);
+  lamp(x,3.2,z,Math.random()>0.5?0xff3924:0x7aab9c);
+}
+
+// 시설 문과 비상 출구
+box(-2,1.5,-19,0.2,3,0.3,metal);
+box(2,1.5,-19,0.2,3,0.3,metal);
+const exitDoor = box(0,1.5,-19,3.7,3,0.45,rust);
+const exitLamp = new THREE.PointLight(0xff1e12,2,6);
+exitLamp.position.set(0,2.7,-18.5);
+scene.add(exitLamp);
+
+// 바닥 배수관과 경고 줄무늬
+for(let x=-18;x<18;x+=2){
+  box(x,0.015,19,1,0.025,0.15, x%4===0?red:gold,false);
+}
+for(let z=-17;z<17;z+=4){
+  box(-19.2,1.8,z,0.06,0.08,1.4,gold,false);
+  box(19.2,1.8,z,0.06,0.08,1.4,gold,false);
+}
+
+// 임무 물체
+function objective(x,z,label,color){
+  const group = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.65,0.55,0.5),metal);
+  base.position.y=0.3;
+  group.add(base);
+  const glow = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42,0.09,0.35),
+    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:2})
+  );
+  glow.position.y=0.62;
+  group.add(glow);
+  group.position.set(x,0,z);
+  scene.add(group);
+  group.userData.label=label;
+  group.userData.glow=glow;
+  return group;
+}
+const fuseMeshes = [
+ objective(-11,7,"퓨즈 A",0x8be8ff),
+ objective(11,4,"퓨즈 B",0x8be8ff),
+ objective(-8,-10,"퓨즈 C",0x8be8ff)
+];
+const cardMesh = objective(12,-11,"키카드",0x72ff8c);
+const genMesh = objective(0,0,"발전기",0xffb04a);
+const exitMesh = objective(0,-17,"출구 패널",0xff3930);
+
+function createMonster(){
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.45,1.25,4,8),dark);
+ body.position.y=1.1;
+ body.castShadow=true;
+ group.add(body);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(0.37,12,12),material(0x171b18));
+ head.position.y=2.05;
+ group.add(head);
+ for(const x of [-0.14,0.14]){
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8),
+    new THREE.MeshBasicMaterial({color:0xff1717}));
+  eye.position.set(x,2.08,-0.32);
+  group.add(eye);
+ }
+ const armMat=material(0x111612);
+ for(const x of [-0.52,0.52]){
+  const arm=new THREE.Mesh(new THREE.CapsuleGeometry(0.12,0.9,3,6),armMat);
+  arm.position.set(x,1.1,0);
+  arm.rotation.z=x<0?-0.15:0.15;
+  group.add(arm);
+ }
+ scene.add(group);
+ return group;
+}
+const monsterMesh=createMonster();
+monsterMesh.visible=false;
+
+// 플레이어 아바타
+const avatarMeshes=new Map();
+const avatarMatBlue=material(0x527a86);
+const avatarMatRed=material(0x987b66);
+function createAvatar(id){
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.28,0.8,3,6),avatarMatBlue);
+ body.position.y=0.8;
+ group.add(body);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(0.2,8,8),material(0x8c9788));
+ head.position.y=1.45;
+ group.add(head);
+ scene.add(group);
+ avatarMeshes.set(id,group);
+ return group;
+}
+
+let ws=null,myId=null,joined=false,locked=false,flashOn=true;
+let yaw=0,pitch=0,hp=100,lastSend=0,lastFrame=performance.now();
+let lastScare=0;
+let state=null;
+const keys={};
+const position=new THREE.Vector3(0,0,14);
+const direction=new THREE.Vector3();
+const moveSpeed=3.3;
+
+function connect(){
+ const proto=location.protocol==="https:"?"wss:":"ws:";
+ ws=new WebSocket(proto+"//"+location.host+"/ws");
+ ws.onopen=()=>{
+  $("connection").textContent="● 시설 연결됨";
+  $("connection").style.color="#9bd8a6";
+  ws.send(JSON.stringify({type:"name",name:$("name").value.trim()||"생존자"}));
+ };
+ ws.onmessage=e=>{
+  const data=JSON.parse(e.data);
+  if(data.type==="welcome"){myId=data.id;return;}
+  if(data.type==="state"){state=data;updateState();}
+ };
+ ws.onclose=()=>{
+  $("connection").textContent="연결 끊김 — 새로고침 필요";
+  $("connection").style.color="#ff8585";
+ };
+ ws.onerror=()=>{$("connection").textContent="서버 오류";};
+}
+function send(obj){
+ if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(obj));
+}
+
+$("start").onclick=()=>{
+ if(joined)return;
+ joined=true;
+ $("overlay").style.display="none";
+ connect();
+ requestLock();
+};
+function requestLock(){
+ renderer.domElement.requestPointerLock?.();
+}
+renderer.domElement.addEventListener("click",()=>{
+ if(joined&&!locked)requestLock();
+});
+document.addEventListener("pointerlockchange",()=>{
+ locked=document.pointerLockElement===renderer.domElement;
+ $("prompt").textContent=locked?"":"클릭하여 시점 조작";
+});
+document.addEventListener("mousemove",e=>{
+ if(!locked)return;
+ yaw-=e.movementX*0.0022;
+ pitch-=e.movementY*0.0022;
+ pitch=Math.max(-1.25,Math.min(1.25,pitch));
+});
+document.addEventListener("keydown",e=>{
+ keys[e.code]=true;
+ if(["KeyW","KeyA","KeyS","KeyD","Space","ShiftLeft"].includes(e.code))e.preventDefault();
+ if(e.repeat)return;
+ if(e.code==="KeyF"){flashOn=!flashOn;flashlight.visible=flashOn;}
+ if(e.code==="KeyE")interact();
+});
+document.addEventListener("keyup",e=>keys[e.code]=false);
+document.addEventListener("pointerlockerror",()=>{$("prompt").textContent="화면을 클릭해 시점 조작";});
+
+function nearestObjective(){
+ if(!state)return null;
+ const m=state.mission;
+ const candidates=[];
+ for(let i=0;i<3;i++){
+  if(!m.fuses.includes(i))candidates.push({kind:"fuse",pos:m.fuse_positions[i],name:"퓨즈 "+String.fromCharCode(65+i)});
+ }
+ if(!m.keycard)candidates.push({kind:"keycard",pos:m.keycard_pos,name:"키카드"});
+ if(!m.generator)candidates.push({kind:"generator",pos:m.generator_pos,name:"발전기"});
+ if(m.generator&&m.keycard&&!m.escaped.includes(myId))candidates.push({kind:"exit",pos:m.exit_pos,name:"출구 패널"});
+ let best=null,bestD=2.7;
+ for(const c of candidates){
+  const d=Math.hypot(position.x-c.pos[0],position.z-c.pos[1]);
+  if(d<bestD){best=c;bestD=d;}
+ }
+ return best;
+}
+function interact(){
+ const obj=nearestObjective();
+ if(!obj){$("prompt").textContent="상호작용 가능한 물체가 가까이 없습니다";return;}
+ send({type:"interact",item:obj.kind});
+}
+function updateState(){
+ if(!state)return;
+ const m=state.mission;
+ const alive=Object.values(state.players).filter(p=>p.alive).length;
+ $("players").textContent="생존자: "+alive+"명";
+ const tasks=[
+  (m.fuses.length===3?"✓":"□")+" 퓨즈 수집 ("+m.fuses.length+"/3)",
+  (m.generator?"✓":"□")+" 발전기 복구",
+  (m.keycard?"✓":"□")+" 키카드 확보",
+  (m.escaped.includes(myId)?"✓":"□")+" 지하 출구 탈출"
+ ];
+ $("tasks").innerHTML=tasks.join("<br>");
+ const me=state.players[myId];
+ if(me){
+  hp=me.hp;
+  $("hp").textContent=hp+"%";
+  $("hpfill").style.width=hp+"%";
+  $("hpfill").style.background=hp<35?"#c83e35":"#b9d4b6";
+  if(!me.alive)$("prompt").textContent="의식 상실 — 5초 후 깨어납니다";
+  else if(!locked)$("prompt").textContent="클릭하여 시점 조작";
+  else{
+   const obj=nearestObjective();
+   $("prompt").textContent=obj?"[E] "+obj.name+" 상호작용":"";
+  }
+ }
+ for(const [id,p] of Object.entries(state.players)){
+  if(id===myId)continue;
+  let a=avatarMeshes.get(id);
+  if(!a)a=createAvatar(id);
+  a.visible=p.alive;
+  a.position.set(p.x,0,p.z);
+  a.rotation.y=p.yaw;
+  a.children[0].material=p.hp<35?avatarMatRed:avatarMatBlue;
+ }
+ for(const [id,a] of avatarMeshes){
+  if(!state.players[id]){scene.remove(a);avatarMeshes.delete(id);}
+ }
+ if(m.escaped.includes(myId)){
+  $("prompt").textContent="탈출 성공! 팀원들을 기다리세요.";
+ }
+ if(m.escaped.length>0&&m.escaped.length===Object.keys(state.players).length){
+  $("prompt").textContent="생존자 전원 탈출 성공";
+ }
+}
+
+function collides(x,z){
+ // 벽과 간단한 기둥 충돌 검사
+ if(x<-18.1||x>18.1||z<-18.1||z>18.1)return true;
+ const blocks=[
+ [-15,-14,1.15],[-15,-5,1.15],[-15,6,1.15],[-15,15,1.15],
+ [15,-14,1.15],[15,-5,1.15],[15,6,1.15],[15,15,1.15],
+ [-12,0,1.6],[12,0,1.6],[-5,-7,1.35],[7,8,1.35],
+ [5,-5,1.35],[-6,9,1.35]
+ ];
+ return blocks.some(([bx,bz,r])=>Math.hypot(x-bx,z-bz)<r);
+}
+
+function move(dt){
+ if(!locked||!state)return;
+ const me=state.players[myId];
+ if(!me||!me.alive||state.mission.escaped.includes(myId))return;
+ let forward=0,side=0;
+ if(keys.KeyW||keys.ArrowUp)forward++;
+ if(keys.KeyS||keys.ArrowDown)forward--;
+ if(keys.KeyD||keys.ArrowRight)side++;
+ if(keys.KeyA||keys.ArrowLeft)side--;
+ const length=Math.hypot(forward,side);
+ if(length>0){forward/=length;side/=length;}
+ const speed=keys.ShiftLeft?5.1:moveSpeed;
+ const dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed*dt;
+ const dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*speed*dt;
+ if(!collides(position.x+dx,position.z))position.x+=dx;
+ if(!collides(position.x,position.z+dz))position.z+=dz;
+}
+
+function updateCamera(){
+ camera.position.set(position.x,1.65,position.z);
+ camera.rotation.set(pitch,yaw,0,"YXZ");
+ const forward=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+ flashlight.position.copy(camera.position);
+ flashlight.target.position.copy(camera.position).add(forward.multiplyScalar(8));
+}
+
+function animate(now){
+ requestAnimationFrame(animate);
+ const dt=Math.min((now-lastFrame)/1000,0.05);
+ lastFrame=now;
+ move(dt);
+ updateCamera();
+
+ if(state){
+  const m=state.mission;
+  monsterMesh.visible=true;
+  monsterMesh.position.set(m.monster.x,0,m.monster.z);
+  monsterMesh.lookAt(position.x,0,position.z);
+  monsterMesh.position.y=0;
+  const d=Math.hypot(position.x-m.monster.x,position.z-m.monster.z);
+  const t=performance.now()/1000;
+  monsterMesh.scale.y=1+Math.sin(t*6)*0.025;
+  if(d<6&&t-lastScare>8){
+   lastScare=t;
+   $("scare").style.display="block";
+   setTimeout(()=>$("scare").style.display="none",1100);
+  }
+  $("danger").style.borderWidth=d<5?"18px":"0px";
+  $("danger").style.borderColor="rgba(150,0,0,"+(Math.max(0,1-d/6)*0.65)+")";
+
+  for(let i=0;i<3;i++){
+   fuseMeshes[i].visible=!m.fuses.includes(i);
+   fuseMeshes[i].rotation.y=t*0.5;
+  }
+  cardMesh.visible=!m.keycard;
+  genMesh.visible=!m.generator;
+  exitMesh.visible=!(m.generator&&m.keycard);
+  exitDoor.visible=!(m.generator&&m.keycard);
+  exitLamp.color.set(m.generator&&m.keycard?0x49ff75:0xff1e12);
+  exitLamp.intensity=m.generator&&m.keycard?8:2;
+
+  if(now-lastSend>50){
+   lastSend=now;
+   send({type:"move",x:position.x,z:position.z,yaw});
+  }
+ }
+ for(const item of [cardMesh,genMesh,exitMesh,...fuseMeshes]){
+  if(item.visible){
+   item.position.y=0.06+Math.sin(now/350+item.position.x)*0.08;
+   item.children[1].material.emissiveIntensity=1.6+Math.sin(now/220)*0.5;
+  }
+ }
+ for(const item of ambientLights){
+  const flicker=Math.random()<0.025?Math.random()*0.35:1;
+  item.light.intensity=item.base*flicker;
+ }
+ $("battery").textContent="손전등: "+(flashOn?"ON":"OFF");
+ renderer.render(scene,camera);
+}
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
